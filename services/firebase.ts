@@ -195,14 +195,30 @@ export const getOwnerProfile = () => new Promise<User | null>((resolve) => {
 // --- MOCK STORAGE ---
 export const storage = {}; // Mock storage object
 
-export const uploadFile = (file: File, onProgress?: (progress: number) => void) => new Promise<{ url: string, name: string }>((resolve) => {
+const fileToDataUrl = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = (error) => reject(error);
+        reader.readAsDataURL(file);
+    });
+};
+
+export const uploadFile = (file: File, onProgress?: (progress: number) => void) => new Promise<{ url: string, name: string }>((resolve, reject) => {
+    const processFile = async () => {
+        try {
+            const url = await fileToDataUrl(file);
+            console.log(`File "${file.name}" stored as data URL.`);
+            resolve({ url, name: file.name });
+        } catch (error) {
+            console.error("Error converting file to data URL", error);
+            reject(error);
+        }
+    };
+
     if (!onProgress) {
         // Original behavior without progress
-        setTimeout(() => {
-            const url = URL.createObjectURL(file);
-            console.log(`File "${file.name}" uploaded to mock storage at ${url}`);
-            resolve({ url, name: file.name });
-        }, MOCK_DELAY * 2);
+        setTimeout(processFile, MOCK_DELAY * 2);
         return;
     }
 
@@ -214,9 +230,7 @@ export const uploadFile = (file: File, onProgress?: (progress: number) => void) 
         onProgress(progress);
         if (progress >= 100) {
             clearInterval(interval);
-            const url = URL.createObjectURL(file);
-            console.log(`File "${file.name}" uploaded to mock storage at ${url}`);
-            resolve({ url, name: file.name });
+            processFile();
         }
     }, 200); // Update progress every 200ms
 });
