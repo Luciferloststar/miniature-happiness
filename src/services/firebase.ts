@@ -53,7 +53,7 @@ import {
     deleteObject,
 } from 'firebase/storage';
 
-import { User, Work, Comment, Category, SiteSettings } from '../types';
+import { User, Work, Comment, SiteSettings } from '../types';
 import { OWNER_EMAIL } from '../constants';
 
 // --- PASTE YOUR FIREBASE CONFIG HERE ---
@@ -66,6 +66,10 @@ const firebaseConfig = {
   appId: "YOUR_APP_ID"
 };
 
+// --- CONFIGURATION CHECK ---
+// This flag is used by the app's entry point to prevent crashing if Firebase isn't configured.
+export const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY" && firebaseConfig.projectId !== "YOUR_PROJECT_ID";
+
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -74,21 +78,6 @@ export const storage = getStorage(app);
 
 
 // --- HELPER FUNCTIONS ---
-const getFirebaseErrorMessage = (error: any): string => {
-    switch (error.code) {
-        case 'auth/user-not-found':
-            return 'No account found with this email.';
-        case 'auth/wrong-password':
-            return 'Incorrect password. Please try again.';
-        case 'auth/email-already-in-use':
-            return 'This email is already registered.';
-        case 'auth/weak-password':
-            return 'Password should be at least 6 characters.';
-        default:
-            return error.message || 'An unknown error occurred.';
-    }
-};
-
 const fileUrlToStorageRef = (url: string) => {
     try {
         const urlObject = new URL(url);
@@ -128,9 +117,9 @@ export const onAuthStateChanged = (callback: (user: User | null) => void) => {
     });
 };
 
-export const mockSignIn = (email: string, pass: string) => signInWithEmailAndPassword(auth, email, pass);
+export const signIn = (email: string, pass: string) => signInWithEmailAndPassword(auth, email, pass);
 
-export const mockSignUp = async (email: string, pass:string) => {
+export const signUp = async (email: string, pass:string) => {
     const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
     await createUserProfileDocument(userCredential.user);
     // You might want to enable email verification in your app
@@ -138,12 +127,12 @@ export const mockSignUp = async (email: string, pass:string) => {
     return userCredential;
 };
 
-export const mockSignOut = () => firebaseSignOut(auth);
-export const mockUpdatePassword = (newPass: string) => {
+export const signOut = () => firebaseSignOut(auth);
+export const updatePassword = (newPass: string) => {
     if (!auth.currentUser) throw new Error("Not authenticated");
     return firebaseUpdatePassword(auth.currentUser, newPass);
 };
-export const mockForgotPassword = (email: string) => sendPasswordResetEmail(auth, email);
+export const forgotPassword = (email: string) => sendPasswordResetEmail(auth, email);
 
 export const createUserProfileDocument = async (user: FirebaseUser, additionalData = {}) => {
     const userRef = doc(db, `users/${user.uid}`);
@@ -166,7 +155,7 @@ export const createUserProfileDocument = async (user: FirebaseUser, additionalDa
     return userRef;
 };
 
-export const mockUpdateProfile = async (updates: Partial<User>): Promise<User> => {
+export const updateProfile = async (updates: Partial<User>): Promise<User> => {
     if (!auth.currentUser) throw new Error("Not authenticated");
 
     const authUpdates: { displayName?: string; photoURL?: string } = {};
@@ -226,7 +215,7 @@ export const uploadFile = (file: File, onProgress?: (progress: number) => void):
                 if (onProgress) onProgress(progress);
             },
             (error) => {
-                reject(getFirebaseErrorMessage(error));
+                reject(error);
             },
             async () => {
                 const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
@@ -259,7 +248,8 @@ export const addWork = (workData: Omit<Work, 'id'>): Promise<Work> => {
                 ...workData,
                 uploadDate: serverTimestamp(),
             });
-            resolve({ ...workData, id: docRef.id });
+            const newWorkData = { ...workData, id: docRef.id, uploadDate: new Date() };
+            resolve(newWorkData as Work);
         } catch (error) {
             reject(error);
         }

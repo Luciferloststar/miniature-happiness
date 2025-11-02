@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types';
-import { auth, onAuthStateChanged, mockSignIn, mockSignUp, mockSignOut, mockUpdatePassword, mockUpdateProfile, mockForgotPassword } from '../services/firebase';
+import { auth, onAuthStateChanged, signIn, signUp, signOut, updatePassword, updateProfile, forgotPassword } from '../services/firebase';
 import toast from 'react-hot-toast';
 
 interface AuthContextType {
@@ -46,9 +46,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => unsubscribe();
   }, []);
 
-  const signIn = async (email: string, pass: string) => {
+  const signInUser = async (email: string, pass: string) => {
     try {
-        await mockSignIn(email, pass);
+        await signIn(email, pass);
         toast.success('Login Successful!');
     } catch (error) {
         toast.error(getFirebaseErrorMessage(error));
@@ -56,9 +56,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }
   
-  const signUp = async (email: string, pass: string) => {
+  const signUpUser = async (email: string, pass: string) => {
     try {
-        await mockSignUp(email, pass);
+        await signUp(email, pass);
         toast.success('Account Created! Please check your email for verification.');
     } catch (error) {
         toast.error(getFirebaseErrorMessage(error));
@@ -66,16 +66,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }
 
-  const signOut = async () => {
-    await mockSignOut();
+  const signOutUser = async () => {
+    await signOut();
     setUser(null);
     toast.success('Logged out successfully.');
   }
   
-  const updatePassword = async (newPass: string) => {
+  const updateUserPassword = async (newPass: string) => {
     try {
       if(!user) throw new Error("Not authenticated");
-      await mockUpdatePassword(newPass);
+      await updatePassword(newPass);
       toast.success("Password updated!");
     } catch (error) {
       toast.error(getFirebaseErrorMessage(error));
@@ -83,10 +83,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }
 
-  const updateProfile = async (updates: Partial<User>) => {
+  const updateUserProfile = async (updates: Partial<User>) => {
     try {
       if(!user) throw new Error("Not authenticated");
-      const updatedUser = await mockUpdateProfile(updates);
+      const updatedUser = await updateProfile(updates);
       setUser(updatedUser);
       toast.success("Profile updated!");
     } catch(error) {
@@ -95,9 +95,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }
   
-  const forgotPassword = async (email: string) => {
+  const sendForgotPasswordEmail = async (email: string) => {
       try {
-          await mockForgotPassword(email);
+          await forgotPassword(email);
           toast.success("A password reset link has been sent to your email.");
       } catch (error: any) {
           toast.error(getFirebaseErrorMessage(error));
@@ -105,7 +105,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }
 
 
-  const value = { user, loading, signIn, signUp, signOut, updatePassword, updateProfile, forgotPassword };
+  const value = { user, loading, signIn: signInUser, signUp: signUpUser, signOut: signOutUser, updatePassword: updateUserPassword, updateProfile: updateUserProfile, forgotPassword: sendForgotPasswordEmail };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
