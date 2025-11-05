@@ -19,6 +19,8 @@ const COMMENTS_KEY = 'firebase_mock_comments';
 const SESSION_KEY = 'firebase_mock_session';
 const SITE_SETTINGS_KEY = 'firebase_mock_site_settings';
 const NOTIFICATIONS_KEY = 'firebase_mock_notifications';
+const AUTH_STATE_CHANGE_EVENT = 'mock_auth_state_changed';
+
 
 const getFromStorage = <T,>(key: string): T | null => {
     try {
@@ -100,10 +102,20 @@ initStorage();
 // --- MOCK AUTH ---
 export const auth = {};
 export const onAuthStateChanged = (authObj: any, callback: (user: User | null) => void) => {
+    const handler = (e: Event) => {
+        const customEvent = e as CustomEvent;
+        callback(customEvent.detail.user);
+    };
+    window.addEventListener(AUTH_STATE_CHANGE_EVENT, handler);
+
+    // Initial state check for page load
     const session = getFromStorage<{ uid: string }>(SESSION_KEY);
     const users = getFromStorage<{ [key: string]: User }>(USERS_KEY) || {};
     callback(session ? users[session.uid] || null : null);
-    return () => {};
+
+    return () => {
+        window.removeEventListener(AUTH_STATE_CHANGE_EVENT, handler);
+    };
 };
 export const mockSignIn = (email: string, pass: string) => new Promise<{ user: User } | { error: string }>((resolve) => {
     setTimeout(() => {
@@ -111,6 +123,7 @@ export const mockSignIn = (email: string, pass: string) => new Promise<{ user: U
         const user = Object.values(users).find(u => u.email === email);
         if (user) {
             saveToStorage(SESSION_KEY, { uid: user.uid });
+            window.dispatchEvent(new CustomEvent(AUTH_STATE_CHANGE_EVENT, { detail: { user } }));
             resolve({ user });
         } else {
             resolve({ error: "User not found." });
@@ -126,10 +139,17 @@ export const mockSignUp = (email: string, pass: string) => new Promise<{ user: U
         users[uid] = newUser;
         saveToStorage(USERS_KEY, users);
         saveToStorage(SESSION_KEY, { uid });
+        window.dispatchEvent(new CustomEvent(AUTH_STATE_CHANGE_EVENT, { detail: { user: newUser } }));
         resolve({ user: newUser });
     }, MOCK_DELAY);
 });
-export const mockSignOut = () => new Promise<void>((resolve) => { setTimeout(() => { localStorage.removeItem(SESSION_KEY); resolve(); }, MOCK_DELAY); });
+export const mockSignOut = () => new Promise<void>((resolve) => {
+    setTimeout(() => {
+        localStorage.removeItem(SESSION_KEY);
+        window.dispatchEvent(new CustomEvent(AUTH_STATE_CHANGE_EVENT, { detail: { user: null } }));
+        resolve();
+    }, MOCK_DELAY);
+});
 export const mockUpdatePassword = (newPass: string) => new Promise<void>((resolve) => { setTimeout(() => { console.log(`Password updated to "${newPass}" (mocked).`); resolve(); }, MOCK_DELAY); });
 export const mockUpdateProfile = (updates: Partial<User>) => new Promise<User>((resolve, reject) => {
     setTimeout(() => {
@@ -137,9 +157,11 @@ export const mockUpdateProfile = (updates: Partial<User>) => new Promise<User>((
         if (!session) return reject("Not authenticated");
         let users = getFromStorage<{ [key: string]: User }>(USERS_KEY) || {};
         if (updates.profileId) delete updates.profileId;
-        users[session.uid] = { ...users[session.uid], ...updates };
+        const updatedUser = { ...users[session.uid], ...updates };
+        users[session.uid] = updatedUser;
         saveToStorage(USERS_KEY, users);
-        resolve(users[session.uid]);
+        window.dispatchEvent(new CustomEvent(AUTH_STATE_CHANGE_EVENT, { detail: { user: updatedUser } }));
+        resolve(updatedUser);
     }, MOCK_DELAY);
 });
 export const mockForgotPassword = (email: string) => new Promise<void>((resolve, reject) => {

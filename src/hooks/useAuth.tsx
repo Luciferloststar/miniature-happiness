@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types';
-// FIX: Aliased mock function imports to match what the component expects (e.g., mockSignIn as signIn).
-import { auth, onAuthStateChanged, mockSignIn as signIn, mockSignUp as signUp, mockSignOut as signOut, mockUpdatePassword as updatePassword, mockUpdateProfile as updateProfile, mockForgotPassword as forgotPassword } from '../services/firebase';
+import { auth, onAuthStateChanged, mockSignIn, mockSignUp, mockSignOut, mockUpdatePassword, mockUpdateProfile, mockForgotPassword } from '../services/firebase';
 import toast from 'react-hot-toast';
 
 interface AuthContextType {
@@ -17,30 +16,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const getFirebaseErrorMessage = (error: any): string => {
-    switch (error.code) {
-        case 'auth/user-not-found':
-            return 'No account found with this email.';
-        case 'auth/wrong-password':
-            return 'Incorrect password. Please try again.';
-        case 'auth/email-already-in-use':
-            return 'This email is already registered.';
-        case 'auth/weak-password':
-            return 'Password must be at least 6 characters long.';
-        case 'auth/requires-recent-login':
-            return 'This action is sensitive and requires recent authentication. Please log in again.';
-        default:
-            return error.message || 'An unknown error occurred.';
-    }
-};
-
-
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // FIX: Passed the 'auth' object as the first argument to onAuthStateChanged, as required by its signature.
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
       setLoading(false);
@@ -48,66 +28,63 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => unsubscribe();
   }, []);
 
-  const signInUser = async (email: string, pass: string) => {
-    try {
-        await signIn(email, pass);
-        toast.success('Login Successful!');
-    } catch (error) {
-        toast.error(getFirebaseErrorMessage(error));
-        throw error;
+  const signIn = async (email: string, pass: string) => {
+    const result = await mockSignIn(email, pass);
+    if ('error' in result) {
+        toast.error(result.error);
+        throw new Error(result.error);
     }
+    toast.success('Login Successful!');
   }
   
-  const signUpUser = async (email: string, pass: string) => {
-    try {
-        await signUp(email, pass);
-        toast.success('Account Created! Please check your email for verification.');
-    } catch (error) {
-        toast.error(getFirebaseErrorMessage(error));
-        throw error;
+  const signUp = async (email: string, pass: string) => {
+    const result = await mockSignUp(email, pass);
+    if ('error' in result) {
+        toast.error(result.error);
+        throw new Error(result.error);
     }
+    toast.success('Account Created! Please check your email for verification.');
   }
 
-  const signOutUser = async () => {
-    await signOut();
-    setUser(null);
+  const signOut = async () => {
+    await mockSignOut();
+    // User state will be updated by onAuthStateChanged listener
     toast.success('Logged out successfully.');
   }
   
-  const updateUserPassword = async (newPass: string) => {
+  const updatePassword = async (newPass: string) => {
     try {
       if(!user) throw new Error("Not authenticated");
-      await updatePassword(newPass);
+      await mockUpdatePassword(newPass);
       toast.success("Password updated!");
-    } catch (error) {
-      toast.error(getFirebaseErrorMessage(error));
+    } catch (error: any) {
+      toast.error(error.message || "An unknown error occurred.");
       throw error;
     }
   }
 
-  const updateUserProfile = async (updates: Partial<User>) => {
+  const updateProfile = async (updates: Partial<User>) => {
     try {
       if(!user) throw new Error("Not authenticated");
-      const updatedUser = await updateProfile(updates);
-      setUser(updatedUser);
+      await mockUpdateProfile(updates);
+      // User state will be updated by onAuthStateChanged listener
       toast.success("Profile updated!");
-    } catch(error) {
-        toast.error(getFirebaseErrorMessage(error));
+    } catch(error: any) {
+        toast.error(error.message || "An unknown error occurred.");
         throw error;
     }
   }
   
-  const sendForgotPasswordEmail = async (email: string) => {
+  const forgotPassword = async (email: string) => {
       try {
-          await forgotPassword(email);
+          await mockForgotPassword(email);
           toast.success("A password reset link has been sent to your email.");
       } catch (error: any) {
-          toast.error(getFirebaseErrorMessage(error));
+          toast.error(error.message);
       }
   }
 
-
-  const value = { user, loading, signIn: signInUser, signUp: signUpUser, signOut: signOutUser, updatePassword: updateUserPassword, updateProfile: updateUserProfile, forgotPassword: sendForgotPasswordEmail };
+  const value = { user, loading, signIn, signUp, signOut, updatePassword, updateProfile, forgotPassword };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
