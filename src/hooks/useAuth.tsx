@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types';
-import { auth, onAuthStateChanged, signIn, signUp, signOut, updatePassword, updateProfile, forgotPassword } from '../services/firebase';
+// FIX: Aliased mock function imports to match what the component expects (e.g., mockSignIn as signIn).
+import { auth, onAuthStateChanged, mockSignIn as signIn, mockSignUp as signUp, mockSignOut as signOut, mockUpdatePassword as updatePassword, mockUpdateProfile as updateProfile, mockForgotPassword as forgotPassword } from '../services/firebase';
 import toast from 'react-hot-toast';
 
 interface AuthContextType {
@@ -39,7 +40,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged((user) => {
+    // FIX: Passed the 'auth' object as the first argument to onAuthStateChanged, as required by its signature.
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
       setLoading(false);
     });

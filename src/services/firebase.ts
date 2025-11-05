@@ -1,359 +1,326 @@
-// --- PRODUCTION FIREBASE v10 SDK ---
-// This file provides a production-ready implementation of Firebase services.
-// It uses the official Firebase SDK to connect to Authentication, Firestore,
-// and Cloud Storage.
+// --- MOCK FIREBASE v1.0 ---
+// This file provides a mock implementation of Firebase services.
+// It uses localStorage to persist data, allowing the app to be fully
+// functional for demonstration purposes without a real Firebase backend.
+// To use with a real Firebase project, replace the contents of this file
+// with your Firebase initialization code and actual service functions.
 
-// ---------------------------
-// --- ACTION REQUIRED ---
-// ---------------------------
-// 1. Go to https://firebase.google.com/ and create a new project.
-// 2. In your Firebase project, go to Project Settings (gear icon).
-// 3. Under "Your apps", create a new Web App.
-// 4. Firebase will give you a `firebaseConfig` object. Copy it.
-// 5. Paste your `firebaseConfig` object below, replacing the placeholder.
-// 6. In the Firebase console, go to "Authentication" -> "Sign-in method" and enable "Email/Password".
-// 7. Go to "Firestore Database" -> "Create database" and start in "production mode".
-// 8. Go to "Storage" -> "Get started" and set it up.
+// FIX: Added isFirebaseConfigured export for mock environment to bypass configuration check.
+export const isFirebaseConfigured = true;
 
-import { initializeApp } from 'firebase/app';
-import { 
-    getAuth, 
-    onAuthStateChanged as onFirebaseAuthStateChanged,
-    signInWithEmailAndPassword,
-    createUserWithEmailAndPassword,
-    sendEmailVerification,
-    signOut as firebaseSignOut,
-    updatePassword as firebaseUpdatePassword,
-    sendPasswordResetEmail,
-    updateProfile as firebaseUpdateProfile,
-    User as FirebaseUser,
-} from 'firebase/auth';
-import { 
-    getFirestore,
-    doc,
-    getDoc,
-    setDoc,
-    updateDoc,
-    collection,
-    addDoc,
-    getDocs,
-    deleteDoc,
-    query,
-    orderBy,
-    where,
-    Timestamp,
-    serverTimestamp,
-    writeBatch
-} from 'firebase/firestore';
-import {
-    getStorage,
-    ref,
-    uploadBytesResumable,
-    getDownloadURL,
-    deleteObject,
-} from 'firebase/storage';
+import { User, Work, Comment, Category, SiteSettings, Notification } from '../types';
+import { OWNER_EMAIL, OWNER_PROFILE_ID } from '../constants';
 
-import { User, Work, Comment, SiteSettings } from '../types';
-import { OWNER_EMAIL } from '../constants';
+// --- MOCK CONFIG ---
+const MOCK_DELAY = 300;
+const USERS_KEY = 'firebase_mock_users';
+const WORKS_KEY = 'firebase_mock_works';
+const COMMENTS_KEY = 'firebase_mock_comments';
+const SESSION_KEY = 'firebase_mock_session';
+const SITE_SETTINGS_KEY = 'firebase_mock_site_settings';
+const NOTIFICATIONS_KEY = 'firebase_mock_notifications';
 
-// --- PASTE YOUR FIREBASE CONFIG HERE ---
-const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
-};
-
-// --- CONFIGURATION CHECK ---
-// This flag is used by the app's entry point to prevent crashing if Firebase isn't configured.
-export const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY" && firebaseConfig.projectId !== "YOUR_PROJECT_ID";
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const storage = getStorage(app);
-
-
-// --- HELPER FUNCTIONS ---
-const fileUrlToStorageRef = (url: string) => {
+const getFromStorage = <T,>(key: string): T | null => {
     try {
-        const urlObject = new URL(url);
-        // Firebase Storage URLs have a path like /v0/b/bucket-name/o/folder%2Ffilename.jpg?alt=media&token=...
-        // We need to decode the path part after `/o/`.
-        const path = decodeURIComponent(urlObject.pathname.split('/o/')[1].split('?')[0]);
-        return ref(storage, path);
+        const item = localStorage.getItem(key);
+        return item ? JSON.parse(item) : null;
     } catch (e) {
-        console.error("Could not parse file URL to storage ref:", e);
+        console.error("Failed to parse from localStorage", e);
         return null;
     }
 };
 
-
-// --- AUTHENTICATION & USER PROFILE SERVICES ---
-
-export const onAuthStateChanged = (callback: (user: User | null) => void) => {
-    return onFirebaseAuthStateChanged(auth, async (firebaseUser) => {
-        if (firebaseUser) {
-            const userProfile = await getUserById(firebaseUser.uid);
-            if (userProfile) {
-                callback(userProfile);
-            } else {
-                 // This can happen if the user profile document hasn't been created yet.
-                 // We'll create a temporary user object.
-                 const basicUser: User = {
-                    uid: firebaseUser.uid,
-                    email: firebaseUser.email,
-                    displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0],
-                    profilePictureURL: firebaseUser.photoURL || `https://picsum.photos/seed/${firebaseUser.uid}/200`
-                 };
-                 callback(basicUser);
-            }
-        } else {
-            callback(null);
-        }
-    });
+const saveToStorage = <T,>(key:string, data: T) => {
+    localStorage.setItem(key, JSON.stringify(data));
 };
 
-export const signIn = (email: string, pass: string) => signInWithEmailAndPassword(auth, email, pass);
-
-export const signUp = async (email: string, pass:string) => {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-    await createUserProfileDocument(userCredential.user);
-    // You might want to enable email verification in your app
-    // await sendEmailVerification(userCredential.user);
-    return userCredential;
-};
-
-export const signOut = () => firebaseSignOut(auth);
-export const updatePassword = (newPass: string) => {
-    if (!auth.currentUser) throw new Error("Not authenticated");
-    return firebaseUpdatePassword(auth.currentUser, newPass);
-};
-export const forgotPassword = (email: string) => sendPasswordResetEmail(auth, email);
-
-export const createUserProfileDocument = async (user: FirebaseUser, additionalData = {}) => {
-    const userRef = doc(db, `users/${user.uid}`);
-    const snapshot = await getDoc(userRef);
-    if (!snapshot.exists()) {
-        const { email, displayName, photoURL } = user;
-        const createdAt = new Date();
-        try {
-            await setDoc(userRef, {
-                email,
-                displayName: displayName || email?.split('@')[0],
-                profilePictureURL: photoURL || `https://picsum.photos/seed/${user.uid}/200`,
-                createdAt,
-                ...additionalData,
-            });
-        } catch (error) {
-            console.error("Error creating user profile", error);
-        }
+// Initialize with some data if empty
+const initStorage = () => {
+    if (!localStorage.getItem(USERS_KEY)) {
+        const ownerUser: User = { uid: 'owner-001', email: OWNER_EMAIL, bio: 'The creator of this vault, weaving tales of mystery, documentaries of truth, and articles of insight. Explore my world.', displayName: 'Sagar Sahu', profileId: OWNER_PROFILE_ID, profilePictureURL: `https://picsum.photos/seed/sagar/200` };
+        saveToStorage(USERS_KEY, { [ownerUser.uid]: ownerUser });
     }
-    return userRef;
-};
-
-export const updateProfile = async (updates: Partial<User>): Promise<User> => {
-    if (!auth.currentUser) throw new Error("Not authenticated");
-
-    const authUpdates: { displayName?: string; photoURL?: string } = {};
-    if (updates.displayName) authUpdates.displayName = updates.displayName;
-    if (updates.profilePictureURL) authUpdates.photoURL = updates.profilePictureURL;
-
-    if (Object.keys(authUpdates).length > 0) {
-        await firebaseUpdateProfile(auth.currentUser, authUpdates);
-    }
-    
-    const userDocRef = doc(db, 'users', auth.currentUser.uid);
-    await updateDoc(userDocRef, { ...updates });
-
-    const updatedDoc = await getDoc(userDocRef);
-    return { uid: updatedDoc.id, ...updatedDoc.data() } as User;
-};
-
-
-export const getUserById = async (uid: string): Promise<User | null> => {
-    const userDocRef = doc(db, 'users', uid);
-    const userDoc = await getDoc(userDocRef);
-    if (userDoc.exists()) {
-        const data = userDoc.data();
-        return { 
-            uid: userDoc.id,
-            email: data.email,
-            displayName: data.displayName,
-            bio: data.bio,
-            profileId: data.profileId,
-            profilePictureURL: data.profilePictureURL,
+    if (!localStorage.getItem(WORKS_KEY)) {
+        const initialWork: Work = {
+            id: 'work-001',
+            title: 'The Crimson Cipher',
+            tagline: 'A tale of mystery and code.',
+            category: Category.Story,
+            fileURL: '#',
+            fileName: 'crimson_cipher.pdf',
+            uploadDate: new Date(),
+            ownerId: 'owner-001',
+            coverImageURL: `https://picsum.photos/seed/work-001/1200/800`,
+            viewCount: 123,
+            likes: 42,
+            likeUserIds: [],
         };
+        saveToStorage(WORKS_KEY, { [initialWork.id]: initialWork });
     }
-    return null;
-};
-
-export const getOwnerProfile = async (): Promise<User | null> => {
-    const usersCol = collection(db, 'users');
-    const q = query(usersCol, where("email", "==", OWNER_EMAIL));
-    const querySnapshot = await getDocs(q);
-    if (!querySnapshot.empty) {
-        const ownerDoc = querySnapshot.docs[0];
-        return { uid: ownerDoc.id, ...ownerDoc.data() } as User;
+    if (!localStorage.getItem(COMMENTS_KEY)) {
+        const initialComment = {
+            id: 'comment-001',
+            workId: 'work-001',
+            userId: 'reader-001',
+            userName: 'BookwormReader',
+            text: 'This is an amazing start! Can\'t wait for the next chapter.',
+            createdAt: new Date(),
+        };
+        saveToStorage(COMMENTS_KEY, { 'work-001': [initialComment] });
     }
-    return null;
-}
-
-// --- STORAGE SERVICE ---
-export const uploadFile = (file: File, onProgress?: (progress: number) => void): Promise<{ url: string; name: string }> => {
-    return new Promise((resolve, reject) => {
-        const fileRef = ref(storage, `uploads/${Date.now()}_${file.name}`);
-        const uploadTask = uploadBytesResumable(fileRef, file);
-
-        uploadTask.on(
-            'state_changed',
-            (snapshot) => {
-                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                if (onProgress) onProgress(progress);
-            },
-            (error) => {
-                reject(error);
-            },
-            async () => {
-                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                resolve({ url: downloadURL, name: file.name });
+     if (!localStorage.getItem(SITE_SETTINGS_KEY)) {
+        const defaultSettings: SiteSettings = {
+            coverPages: ['https://picsum.photos/seed/cover1/1920/1080', 'https://picsum.photos/seed/cover2/1920/1080', 'https://picsum.photos/seed/cover3/1920/1080'],
+            taglines: ["Weaving tales of mystery and code.", "Documenting the untold stories of truth.", "Crafting articles that spark insight.", "Where imagination meets the written word.", "Exploring worlds, one page at a time.", "The architect of narratives.", "Penning the future, remembering the past.", "A universe of stories awaits.", "From concept to creation.", "The journey of a thousand words begins here."],
+            socialLinks: [
+                { id: 'sl-1', name: 'Facebook', icon: 'Facebook', url: 'https://facebook.com' },
+                { id: 'sl-2', name: 'Instagram', icon: 'Instagram', url: 'https://instagram.com' }
+            ]
+        };
+        saveToStorage(SITE_SETTINGS_KEY, defaultSettings);
+    }
+    if (!localStorage.getItem(NOTIFICATIONS_KEY)) {
+        const initialNotifications: Notification[] = [
+            {
+                id: `notif-${Date.now()}`,
+                userId: 'owner-001',
+                message: `BookwormReader commented on your work: "The Crimson Cipher"`,
+                link: `/story/work-001`,
+                read: false,
+                createdAt: new Date(Date.now() - 60000 * 5), // 5 minutes ago
+                actor: { id: 'reader-001', name: 'BookwormReader' }
             }
-        );
-    });
-};
-
-const deleteFileFromStorage = async (fileUrl?: string) => {
-    if (!fileUrl || !fileUrl.includes('firebasestorage')) return;
-    const fileRef = fileUrlToStorageRef(fileUrl);
-    if (fileRef) {
-        try {
-            await deleteObject(fileRef);
-        } catch (error: any) {
-            if (error.code !== 'storage/object-not-found') {
-                 console.error("Error deleting file from storage:", error);
-            }
-        }
+        ];
+        saveToStorage(NOTIFICATIONS_KEY, initialNotifications);
     }
-}
+};
 
+initStorage();
 
-// --- FIRESTORE: WORKS ---
-export const addWork = (workData: Omit<Work, 'id'>): Promise<Work> => {
-    return new Promise(async (resolve, reject) => {
-        try {
-            const docRef = await addDoc(collection(db, 'works'), {
-                ...workData,
-                uploadDate: serverTimestamp(),
-            });
-            const newWorkData = { ...workData, id: docRef.id, uploadDate: new Date() };
-            resolve(newWorkData as Work);
-        } catch (error) {
-            reject(error);
+// --- MOCK AUTH ---
+export const auth = {};
+export const onAuthStateChanged = (authObj: any, callback: (user: User | null) => void) => {
+    const session = getFromStorage<{ uid: string }>(SESSION_KEY);
+    const users = getFromStorage<{ [key: string]: User }>(USERS_KEY) || {};
+    callback(session ? users[session.uid] || null : null);
+    return () => {};
+};
+export const mockSignIn = (email: string, pass: string) => new Promise<{ user: User } | { error: string }>((resolve) => {
+    setTimeout(() => {
+        const users = getFromStorage<{ [key: string]: User }>(USERS_KEY) || {};
+        const user = Object.values(users).find(u => u.email === email);
+        if (user) {
+            saveToStorage(SESSION_KEY, { uid: user.uid });
+            resolve({ user });
+        } else {
+            resolve({ error: "User not found." });
         }
-    });
-};
+    }, MOCK_DELAY);
+});
+export const mockSignUp = (email: string, pass: string) => new Promise<{ user: User } | { error: string }>((resolve) => {
+    setTimeout(() => {
+        let users = getFromStorage<{ [key: string]: User }>(USERS_KEY) || {};
+        if (Object.values(users).some(u => u.email === email)) return resolve({ error: "Email already in use." });
+        const uid = `user-${Date.now()}`;
+        const newUser: User = { uid, email, displayName: email.split('@')[0], profilePictureURL: `https://picsum.photos/seed/${uid}/200` };
+        users[uid] = newUser;
+        saveToStorage(USERS_KEY, users);
+        saveToStorage(SESSION_KEY, { uid });
+        resolve({ user: newUser });
+    }, MOCK_DELAY);
+});
+export const mockSignOut = () => new Promise<void>((resolve) => { setTimeout(() => { localStorage.removeItem(SESSION_KEY); resolve(); }, MOCK_DELAY); });
+export const mockUpdatePassword = (newPass: string) => new Promise<void>((resolve) => { setTimeout(() => { console.log(`Password updated to "${newPass}" (mocked).`); resolve(); }, MOCK_DELAY); });
+export const mockUpdateProfile = (updates: Partial<User>) => new Promise<User>((resolve, reject) => {
+    setTimeout(() => {
+        const session = getFromStorage<{ uid: string }>(SESSION_KEY);
+        if (!session) return reject("Not authenticated");
+        let users = getFromStorage<{ [key: string]: User }>(USERS_KEY) || {};
+        if (updates.profileId) delete updates.profileId;
+        users[session.uid] = { ...users[session.uid], ...updates };
+        saveToStorage(USERS_KEY, users);
+        resolve(users[session.uid]);
+    }, MOCK_DELAY);
+});
+export const mockForgotPassword = (email: string) => new Promise<void>((resolve, reject) => {
+    setTimeout(() => {
+        const users = getFromStorage<{ [key: string]: User }>(USERS_KEY) || {};
+        if (Object.values(users).some(u => u.email === email)) {
+            console.log(`Mock password reset sent for ${email}.`);
+            resolve();
+        } else {
+            reject(new Error("Email not found."));
+        }
+    }, MOCK_DELAY);
+});
+export const getUserById = (uid: string) => new Promise<User | null>((resolve) => {
+    setTimeout(() => {
+        const users = getFromStorage<{ [key: string]: User }>(USERS_KEY) || {};
+        resolve(users[uid] || null);
+    }, MOCK_DELAY);
+});
+export const getOwnerProfile = () => new Promise<User | null>((resolve) => {
+    setTimeout(() => {
+        const users = getFromStorage<{ [key: string]: User }>(USERS_KEY) || {};
+        resolve(Object.values(users).find(u => u.email === OWNER_EMAIL) || null);
+    }, MOCK_DELAY);
+});
 
-export const getWorks = async (): Promise<Work[]> => {
-    const worksCol = collection(db, 'works');
-    const q = query(worksCol, orderBy('uploadDate', 'desc'));
-    const worksSnapshot = await getDocs(q);
-    return worksSnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-            id: doc.id,
-            ...data,
-            uploadDate: (data.uploadDate as Timestamp)?.toDate() || new Date(),
-        } as Work;
-    });
-};
+// --- MOCK STORAGE ---
+export const storage = {};
+const fileToDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result as string); reader.onerror = reject; reader.readAsDataURL(file); });
+export const uploadFile = (file: File, onProgress?: (progress: number) => void) => new Promise<{ url: string, name: string }>((resolve, reject) => {
+    const process = async () => { try { const url = await fileToDataUrl(file); resolve({ url, name: file.name }); } catch (e) { reject(e); }};
+    if (!onProgress) { setTimeout(process, MOCK_DELAY * 2); return; }
+    let progress = 0;
+    const interval = setInterval(() => { progress = Math.min(progress + Math.random() * 25, 100); onProgress(progress); if (progress >= 100) { clearInterval(interval); process(); } }, 200);
+});
 
-export const getWorkById = async (id: string): Promise<Work | null> => {
-    const workDocRef = doc(db, 'works', id);
-    const workDoc = await getDoc(workDocRef);
-    if (workDoc.exists()) {
-        const data = workDoc.data();
-        return {
-            id: workDoc.id,
-            ...data,
-            uploadDate: (data.uploadDate as Timestamp)?.toDate() || new Date(),
-        } as Work;
-    }
-    return null;
-};
+// --- MOCK FIRESTORE ---
+export const db = {};
+export const addWork = (workData: Omit<Work, 'id'|'viewCount'|'likes'|'likeUserIds'>) => new Promise<Work>((resolve) => {
+    setTimeout(() => {
+        let works = getFromStorage<{ [key: string]: Work }>(WORKS_KEY) || {};
+        const id = `work-${Date.now()}`;
+        const newWork: Work = { ...workData, id, viewCount: 0, likes: 0, likeUserIds: [] };
+        works[id] = newWork;
+        saveToStorage(WORKS_KEY, works);
+        resolve(newWork);
+    }, MOCK_DELAY);
+});
+export const getWorks = () => new Promise<Work[]>((resolve) => {
+    setTimeout(() => {
+        const works = getFromStorage<{ [key: string]: Work }>(WORKS_KEY) || {};
+        resolve(Object.values(works).sort((a,b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()));
+    }, MOCK_DELAY);
+});
+export const getWorkById = (id: string) => new Promise<Work | null>((resolve) => {
+    setTimeout(() => {
+        const works = getFromStorage<{ [key: string]: Work }>(WORKS_KEY) || {};
+        resolve(works[id] || null);
+    }, MOCK_DELAY);
+});
+export const deleteWork = (work: Work) => new Promise<void>((resolve) => {
+    setTimeout(() => {
+        let works = getFromStorage<{ [key: string]: Work }>(WORKS_KEY) || {};
+        delete works[work.id];
+        saveToStorage(WORKS_KEY, works);
 
-export const deleteWork = async (work: Work): Promise<void> => {
-    // 1. Delete files from Storage
-    await deleteFileFromStorage(work.fileURL);
-    await deleteFileFromStorage(work.coverImageURL);
+        let allComments = getFromStorage<{ [key: string]: Comment[] }>(COMMENTS_KEY) || {};
+        delete allComments[work.id];
+        saveToStorage(COMMENTS_KEY, allComments);
+        
+        let notifications = getFromStorage<Notification[]>(NOTIFICATIONS_KEY) || [];
+        const link = `/story/${work.id}`;
+        notifications = notifications.filter(n => n.link !== link);
+        saveToStorage(NOTIFICATIONS_KEY, notifications);
 
-    // 2. Delete comments subcollection
-    const commentsColRef = collection(db, 'works', work.id, 'comments');
-    const commentsSnapshot = await getDocs(commentsColRef);
-    const batch = writeBatch(db);
-    commentsSnapshot.docs.forEach(doc => {
-        batch.delete(doc.ref);
-    });
-    await batch.commit();
+        resolve();
+    }, MOCK_DELAY);
+});
+export const getComments = (workId: string) => new Promise<Comment[]>((resolve) => {
+    setTimeout(() => {
+        const allComments = getFromStorage<{ [key: string]: Comment[] }>(COMMENTS_KEY) || {};
+        resolve(allComments[workId] || []);
+    }, MOCK_DELAY);
+});
+export const addComment = (commentData: Omit<Comment, 'id' | 'createdAt'>) => new Promise<Comment>((resolve) => {
+    setTimeout(() => {
+        let allComments = getFromStorage<{ [key: string]: Comment[] }>(COMMENTS_KEY) || {};
+        const id = `comment-${Date.now()}`;
+        const newComment = { ...commentData, id, createdAt: new Date() };
+        if (!allComments[commentData.workId]) allComments[commentData.workId] = [];
+        allComments[commentData.workId].push(newComment);
+        saveToStorage(COMMENTS_KEY, allComments);
 
-    // 3. Delete work document
-    const workDocRef = doc(db, 'works', work.id);
-    await deleteDoc(workDocRef);
-};
-
-
-// --- FIRESTORE: COMMENTS ---
-export const getComments = async (workId: string): Promise<Comment[]> => {
-    const commentsCol = collection(db, 'works', workId, 'comments');
-    const q = query(commentsCol, orderBy('createdAt', 'desc'));
-    const commentsSnapshot = await getDocs(q);
-    return commentsSnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-            id: doc.id,
-            ...data,
-            createdAt: (data.createdAt as Timestamp).toDate(),
-        } as Comment;
-    });
-};
-
-export const addComment = (commentData: Omit<Comment, 'id' | 'createdAt'>): Promise<Comment> => {
-     return new Promise(async (resolve, reject) => {
-        try {
-            const commentsColRef = collection(db, 'works', commentData.workId, 'comments');
-            const newComment = {
-                ...commentData,
-                createdAt: serverTimestamp()
+        // --- Create Notification ---
+        const works = getFromStorage<{ [key: string]: Work }>(WORKS_KEY) || {};
+        const work = works[commentData.workId];
+        if (work && work.ownerId !== commentData.userId) {
+            let notifications = getFromStorage<Notification[]>(NOTIFICATIONS_KEY) || [];
+            const newNotification: Notification = {
+                id: `notif-${Date.now()}`,
+                userId: work.ownerId,
+                message: `${commentData.userName} commented on your work: "${work.title}"`,
+                link: `/story/${work.id}`,
+                read: false,
+                createdAt: new Date(),
+                actor: { id: commentData.userId, name: commentData.userName }
             };
-            const docRef = await addDoc(commentsColRef, newComment);
-            resolve({ ...commentData, id: docRef.id, createdAt: new Date() });
-        } catch (error) {
-            reject(error);
+            notifications.unshift(newNotification);
+            saveToStorage(NOTIFICATIONS_KEY, notifications);
         }
-    });
+        resolve(newComment);
+    }, MOCK_DELAY);
+});
+export const deleteComment = (workId: string, commentId: string) => new Promise<void>((resolve) => {
+    setTimeout(() => {
+        let allComments = getFromStorage<{ [key:string]: Comment[] }>(COMMENTS_KEY) || {};
+        if (allComments[workId]) {
+            allComments[workId] = allComments[workId].filter(c => c.id !== commentId);
+            saveToStorage(COMMENTS_KEY, allComments);
+        }
+        resolve();
+    }, MOCK_DELAY);
+});
+// --- SITE SETTINGS ---
+export const getSiteSettings = () => new Promise<SiteSettings>((resolve) => {
+    setTimeout(() => {
+        const settings = getFromStorage<SiteSettings>(SITE_SETTINGS_KEY);
+        resolve(settings || { coverPages: [], taglines: Array(10).fill(''), socialLinks: [] });
+    }, MOCK_DELAY);
+});
+export const updateSiteSettings = (newSettings: SiteSettings) => new Promise<void>((resolve) => { setTimeout(() => { saveToStorage(SITE_SETTINGS_KEY, newSettings); resolve(); }, MOCK_DELAY); });
+
+// --- NEW FEATURES ---
+export const incrementViewCount = (workId: string) => new Promise<void>((resolve) => {
+    setTimeout(() => {
+        let works = getFromStorage<{ [key: string]: Work }>(WORKS_KEY) || {};
+        if (works[workId]) {
+            works[workId].viewCount = (works[workId].viewCount || 0) + 1;
+            saveToStorage(WORKS_KEY, works);
+        }
+        resolve();
+    }, MOCK_DELAY / 2);
+});
+
+export const toggleLike = (workId: string, userId: string) => new Promise<void>((resolve) => {
+    setTimeout(() => {
+        let works = getFromStorage<{ [key: string]: Work }>(WORKS_KEY) || {};
+        const work = works[workId];
+        if (work) {
+            const userIndex = work.likeUserIds.indexOf(userId);
+            if (userIndex > -1) {
+                work.likeUserIds.splice(userIndex, 1);
+                work.likes = (work.likes || 1) - 1;
+            } else {
+                work.likeUserIds.push(userId);
+                work.likes = (work.likes || 0) + 1;
+            }
+            saveToStorage(WORKS_KEY, works);
+        }
+        resolve();
+    }, MOCK_DELAY);
+});
+
+export const getNotifications = (userId: string, onUpdate: (notifications: Notification[]) => void) => {
+    // This mock doesn't support real-time, so we just fetch once.
+    setTimeout(() => {
+        const notifications = getFromStorage<Notification[]>(NOTIFICATIONS_KEY) || [];
+        onUpdate(notifications.filter(n => n.userId === userId));
+    }, MOCK_DELAY);
+    return () => {}; // Return a mock unsubscribe function
 };
 
-export const deleteComment = (workId: string, commentId: string): Promise<void> => {
-    const commentDocRef = doc(db, 'works', workId, 'comments', commentId);
-    return deleteDoc(commentDocRef);
-};
-
-
-// --- FIRESTORE: SITE SETTINGS ---
-const settingsDocRef = doc(db, 'settings', 'site');
-
-export const getSiteSettings = async (): Promise<SiteSettings> => {
-    const docSnap = await getDoc(settingsDocRef);
-    if (docSnap.exists()) {
-        return docSnap.data() as SiteSettings;
-    } else {
-        // Return default settings if none exist
-        return { coverPages: [], taglines: Array(10).fill('') };
-    }
-};
-
-export const updateSiteSettings = (newSettings: SiteSettings): Promise<void> => {
-    return setDoc(settingsDocRef, newSettings, { merge: true });
-};
+export const markNotificationsAsRead = (notificationIds: string[]) => new Promise<void>((resolve) => {
+    setTimeout(() => {
+        let notifications = getFromStorage<Notification[]>(NOTIFICATIONS_KEY) || [];
+        notifications.forEach(n => {
+            if (notificationIds.includes(n.id)) {
+                n.read = true;
+            }
+        });
+        saveToStorage(NOTIFICATIONS_KEY, notifications);
+        resolve();
+    }, MOCK_DELAY);
+});
