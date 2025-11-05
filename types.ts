@@ -19,10 +19,13 @@ export interface Work {
     tagline: string;
     category: Category;
     fileURL: string;
-    fileName: string;
+    fileName:string;
     uploadDate: Date;
     ownerId: string;
     coverImageURL?: string;
+    viewCount: number;
+    likes: number;
+    likeUserIds: string[];
 }
 
 export interface Comment {
@@ -34,7 +37,28 @@ export interface Comment {
     createdAt: Date;
 }
 
+export interface SocialLink {
+    id: string;
+    name: string;
+    url: string;
+    icon: string;
+}
+
 export interface SiteSettings {
     coverPages: string[];
     taglines: string[];
+    socialLinks: SocialLink[];
+}
+
+export interface Notification {
+    id: string;
+    userId: string; // The user who receives the notification
+    message: string;
+    link: string;
+    read: boolean;
+    createdAt: Date;
+    actor: { // The user who performed the action
+        id: string;
+        name: string;
+    };
 }
