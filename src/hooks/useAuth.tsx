@@ -34,6 +34,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toast.error(result.error);
         throw new Error(result.error);
     }
+    // FIX: Set user directly to prevent race condition before navigation
+    setUser(result.user);
     toast.success('Login Successful!');
   }
   
@@ -43,12 +45,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toast.error(result.error);
         throw new Error(result.error);
     }
+    // FIX: Set user directly to prevent race condition before navigation
+    setUser(result.user);
     toast.success('Account Created! Please check your email for verification.');
   }
 
   const signOut = async () => {
     await mockSignOut();
-    // User state will be updated by onAuthStateChanged listener
+    // FIX: Set user to null directly to ensure immediate state update on logout
+    setUser(null);
     toast.success('Logged out successfully.');
   }
   
@@ -66,8 +71,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const updateProfile = async (updates: Partial<User>) => {
     try {
       if(!user) throw new Error("Not authenticated");
-      await mockUpdateProfile(updates);
-      // User state will be updated by onAuthStateChanged listener
+      // FIX: Capture returned user and update state directly for immediate UI feedback
+      const updatedUser = await mockUpdateProfile(updates);
+      setUser(updatedUser);
       toast.success("Profile updated!");
     } catch(error: any) {
         toast.error(error.message || "An unknown error occurred.");
