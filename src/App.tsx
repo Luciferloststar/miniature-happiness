@@ -27,7 +27,11 @@ const OwnerRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 }
 
 const AppContent: React.FC = () => {
-    const { user } = useAuth();
+    const { user, loading } = useAuth();
+
+    if (loading) {
+        return <div className="flex justify-center items-center h-screen bg-black"><div className="text-yellow-400 text-2xl">Loading...</div></div>;
+    }
 
     return (
         <HashRouter>
