@@ -1,9 +1,8 @@
 import React from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { Link, useNavigate } from 'react-router-dom';
-import { LogOut, LayoutDashboard } from 'lucide-react';
+import { LogOut, User, LayoutDashboard } from 'lucide-react';
 import { OWNER_EMAIL } from '../constants';
-import Notifications from './Notifications';
 
 const Header: React.FC = () => {
     const { user, signOut } = useAuth();
@@ -22,7 +21,7 @@ const Header: React.FC = () => {
                 </Link>
                 <nav>
                     {user && (
-                        <div className="flex items-center space-x-2 sm:space-x-4">
+                        <div className="flex items-center space-x-4">
                              {user.email === OWNER_EMAIL && user.displayName ? (
                                 <span className="text-yellow-400 hidden sm:block font-bold glow-text">{user.displayName}</span>
                              ) : (
@@ -30,12 +29,9 @@ const Header: React.FC = () => {
                              )}
                              
                              {user.email === OWNER_EMAIL && (
-                                <>
-                                    <Notifications />
-                                    <Link to="/dashboard" className="text-yellow-400 hover:text-white transition-colors p-2 rounded-full hover:bg-red-800/50" aria-label="Dashboard">
-                                        <LayoutDashboard size={20} />
-                                    </Link>
-                                </>
+                                <Link to="/dashboard" className="text-yellow-400 hover:text-white transition-colors p-2 rounded-full hover:bg-red-800/50">
+                                    <LayoutDashboard size={20} />
+                                </Link>
                              )}
                             <button
                                 onClick={handleSignOut}

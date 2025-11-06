@@ -37,7 +37,7 @@ const AppContent: React.FC = () => {
         <HashRouter>
             <Layout>
                 <Routes>
-                    <Route path="/auth" element={<AuthPage />} />
+                    <Route path="/auth" element={user ? <Navigate to="/home" /> : <AuthPage />} />
                     <Route path="/login-success" element={<ProtectedRoute><LoginSuccessPage /></ProtectedRoute>} />
                     <Route path="/home" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
                     <Route path="/dashboard" element={<OwnerRoute><DashboardPage /></OwnerRoute>} />

@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Work, Category, SiteSettings } from '../../types';
 import { getWorks, deleteWork, getSiteSettings } from '../../services/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { CATEGORIES, OWNER_EMAIL } from '../../constants';
-import { ChevronLeft, ChevronRight, Eye, Trash2, Heart } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, Trash2 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
 
@@ -173,7 +173,7 @@ const OwnerHero: React.FC<{ settings: SiteSettings | null }> = ({ settings }) =>
     );
 };
 
-const OwnerWorkCard: React.FC<{ work: Work; onDelete: (work: Work) => void }> = ({ work, onDelete }) => {
+const OwnerWorkCard: React.FC<{ work: Work; onDelete: (workId: string) => void }> = ({ work, onDelete }) => {
     const fallbackImage = `https://picsum.photos/seed/${work.id}/400/300`;
 
     return (
@@ -192,24 +192,12 @@ const OwnerWorkCard: React.FC<{ work: Work; onDelete: (work: Work) => void }> = 
                      <span className="bg-red-700 text-white text-xs font-bold px-2 py-1 rounded-full flex-shrink-0">{work.category}</span>
                 </div>
                 <p className="text-gray-400 mt-2 text-sm italic">"{work.tagline}"</p>
-                
-                 <div className="mt-4 flex items-center space-x-4 text-gray-400 text-sm">
-                    <div className="flex items-center space-x-1 bg-gray-800/50 px-2 py-1 rounded-full">
-                        <Eye size={16} />
-                        <span className="font-mono">{work.viewCount || 0}</span>
-                    </div>
-                    <div className="flex items-center space-x-1 bg-gray-800/50 px-2 py-1 rounded-full">
-                        <Heart size={16} />
-                        <span className="font-mono">{work.likes || 0}</span>
-                    </div>
-                </div>
-
                 <div className="mt-auto pt-4 flex justify-between items-center">
                     <Link to={`/story/${work.id}`} className="flex items-center space-x-2 text-sm text-yellow-500 hover:text-yellow-400 font-bold">
                         <Eye size={16} />
                         <span>View Details</span>
                     </Link>
-                    <button onClick={() => onDelete(work)} className="text-gray-500 hover:text-red-500 transition-colors p-1 rounded-full hover:bg-red-500/10">
+                    <button onClick={() => onDelete(work.id)} className="text-gray-500 hover:text-red-500 transition-colors p-1 rounded-full hover:bg-red-500/10">
                         <Trash2 size={16} />
                     </button>
                 </div>
@@ -230,12 +218,12 @@ const OwnerHomePage: React.FC<{ works: Work[]; onWorkDeleted: (workId: string) =
         }
     }, [activeFilter, works]);
 
-    const handleDelete = async (work: Work) => {
+    const handleDelete = async (workId: string) => {
         if (window.confirm("Are you sure you want to permanently delete this work? This action cannot be undone.")) {
             try {
                 toast.loading('Deleting work...', { id: 'delete-toast' });
-                await deleteWork(work);
-                onWorkDeleted(work.id);
+                await deleteWork(workId);
+                onWorkDeleted(workId);
                 toast.success('Work deleted successfully!', { id: 'delete-toast' });
             } catch (error) {
                 toast.error('Failed to delete work.', { id: 'delete-toast' });

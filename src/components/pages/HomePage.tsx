@@ -4,7 +4,7 @@ import { getWorks, deleteWork, getSiteSettings } from '../../services/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { CATEGORIES, OWNER_EMAIL } from '../../constants';
-import { ChevronLeft, ChevronRight, Eye, Trash2, Heart } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, Trash2 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
 
@@ -192,18 +192,6 @@ const OwnerWorkCard: React.FC<{ work: Work; onDelete: (work: Work) => void }> = 
                      <span className="bg-red-700 text-white text-xs font-bold px-2 py-1 rounded-full flex-shrink-0">{work.category}</span>
                 </div>
                 <p className="text-gray-400 mt-2 text-sm italic">"{work.tagline}"</p>
-                
-                 <div className="mt-4 flex items-center space-x-4 text-gray-400 text-sm">
-                    <div className="flex items-center space-x-1 bg-gray-800/50 px-2 py-1 rounded-full">
-                        <Eye size={16} />
-                        <span className="font-mono">{work.viewCount || 0}</span>
-                    </div>
-                    <div className="flex items-center space-x-1 bg-gray-800/50 px-2 py-1 rounded-full">
-                        <Heart size={16} />
-                        <span className="font-mono">{work.likes || 0}</span>
-                    </div>
-                </div>
-
                 <div className="mt-auto pt-4 flex justify-between items-center">
                     <Link to={`/story/${work.id}`} className="flex items-center space-x-2 text-sm text-yellow-500 hover:text-yellow-400 font-bold">
                         <Eye size={16} />

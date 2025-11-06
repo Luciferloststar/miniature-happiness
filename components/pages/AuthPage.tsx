@@ -1,4 +1,5 @@
-import React, { useState, FormEvent, useEffect } from 'react';
+
+import React, { useState, FormEvent } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -8,17 +9,13 @@ import { OWNER_EMAIL, OWNER_PROFILE_ID } from '../../constants';
 type AuthMode = 'login' | 'signup';
 type AuthView = 'reader' | 'creator';
 
-interface AuthFormProps {
-    mode: AuthMode;
-    onSuccess: () => void;
-}
-
-const AuthForm: React.FC<AuthFormProps> = ({ mode, onSuccess }) => {
+const AuthForm: React.FC<{ mode: AuthMode }> = ({ mode }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const { signIn, signUp } = useAuth();
+    const navigate = useNavigate();
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
@@ -32,10 +29,14 @@ const AuthForm: React.FC<AuthFormProps> = ({ mode, onSuccess }) => {
 
         try {
             const action = mode === 'login' ? signIn(email, password) : signUp(email, password);
-            await action;
-            onSuccess();
+            const result = await action;
+            if (result.error) {
+                toast.error(result.error);
+            } else {
+                navigate('/login-success');
+            }
         } catch (error: any) {
-            console.error("Authentication failed:", error);
+            toast.error(error.message || 'An unexpected error occurred.');
         } finally {
             setLoading(false);
         }
@@ -80,24 +81,25 @@ const AuthForm: React.FC<AuthFormProps> = ({ mode, onSuccess }) => {
     );
 }
 
-interface CreatorLoginFormProps {
-    onSuccess: () => void;
-}
-
-const CreatorLoginForm: React.FC<CreatorLoginFormProps> = ({ onSuccess }) => {
+const CreatorLoginForm = () => {
     const [email, setEmail] = useState(OWNER_EMAIL);
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const { signIn, forgotPassword } = useAuth();
+    const navigate = useNavigate();
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setLoading(true);
         try {
-            await signIn(email, password);
-            onSuccess();
+            const result = await signIn(email, password);
+             if (result.error) {
+                toast.error(result.error);
+            } else {
+                navigate('/login-success');
+            }
         } catch (error: any) {
-             console.error("Creator login failed:", error);
+             toast.error(error.message || 'An unexpected error occurred.');
         } finally {
             setLoading(false);
         }
@@ -161,26 +163,8 @@ const CreatorLoginForm: React.FC<CreatorLoginFormProps> = ({ onSuccess }) => {
 
 
 const AuthPage: React.FC = () => {
-    const { user, loading } = useAuth();
-    const navigate = useNavigate();
     const [view, setView] = useState<AuthView>('reader');
     const [readerMode, setReaderMode] = useState<AuthMode>('login');
-
-    useEffect(() => {
-        // Redirect already authenticated users away from the login page
-        if (!loading && user) {
-            navigate('/home', { replace: true });
-        }
-    }, [user, loading, navigate]);
-    
-    const handleAuthSuccess = () => {
-        navigate('/login-success');
-    };
-
-    // While checking auth state, or if a user is logged in and waiting for redirect, show a loader
-    if (loading || user) {
-        return <div className="flex justify-center items-center h-screen bg-black"><div className="text-yellow-400 text-2xl">Authenticating...</div></div>;
-    }
 
     return (
         <div className="flex flex-col items-center justify-center min-h-[70vh]">
@@ -207,7 +191,7 @@ const AuthPage: React.FC = () => {
                            <button onClick={() => setReaderMode('login')} className={`px-4 py-2 text-sm font-medium rounded-l-md ${readerMode === 'login' ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400'}`}>Log In</button>
                            <button onClick={() => setReaderMode('signup')} className={`px-4 py-2 text-sm font-medium rounded-r-md ${readerMode === 'signup' ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400'}`}>Sign Up</button>
                         </div>
-                        <AuthForm mode={readerMode} onSuccess={handleAuthSuccess} />
+                        <AuthForm mode={readerMode} />
                     </>
                 )}
 
@@ -219,7 +203,7 @@ const AuthPage: React.FC = () => {
                                 Welcome back, Sagar.
                             </p>
                         </div>
-                        <CreatorLoginForm onSuccess={handleAuthSuccess} />
+                        <CreatorLoginForm />
                     </>
                 )}
             </div>

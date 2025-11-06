@@ -1,12 +1,12 @@
 import React, { useState, FormEvent, useRef, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
-import { Category, SiteSettings, SocialLink } from '../../types';
-import { CATEGORIES, ACCEPTED_FILE_TYPES, AVAILABLE_SOCIAL_ICONS } from '../../constants';
+import { Category, SiteSettings } from '../../types';
+import { CATEGORIES, ACCEPTED_FILE_TYPES } from '../../constants';
 import { uploadFile, addWork, getSiteSettings, updateSiteSettings } from '../../services/firebase';
 import confetti from 'canvas-confetti';
 import { Link } from 'react-router-dom';
-import { Trash2, UploadCloud, X, Camera, PlusCircle } from 'lucide-react';
+import { Trash2, UploadCloud, X, Camera } from 'lucide-react';
 
 const ProfileSection: React.FC = () => {
     const { user, updateProfile, updatePassword } = useAuth();
@@ -124,88 +124,16 @@ const ProfileSection: React.FC = () => {
     );
 };
 
-const SocialLinksSection: React.FC<{ settings: SiteSettings, onSettingsChange: (newSettings: SiteSettings) => void }> = ({ settings, onSettingsChange }) => {
-
-    const handleLinkChange = (id: string, field: keyof Omit<SocialLink, 'id'>, value: string) => {
-        const newLinks = settings.socialLinks.map(link => 
-            link.id === id ? { ...link, [field]: value } : link
-        );
-        onSettingsChange({ ...settings, socialLinks: newLinks });
-    };
-
-    const handleAddLink = () => {
-        const newLink: SocialLink = {
-            id: `sl-${Date.now()}`,
-            name: '',
-            icon: Object.keys(AVAILABLE_SOCIAL_ICONS)[0],
-            url: ''
-        };
-        onSettingsChange({ ...settings, socialLinks: [...settings.socialLinks, newLink] });
-    };
-
-    const handleRemoveLink = (id: string) => {
-        const newLinks = settings.socialLinks.filter(link => link.id !== id);
-        onSettingsChange({ ...settings, socialLinks: newLinks });
-    };
-
-    return (
-        <div className="space-y-4">
-            <h3 className="text-xl text-yellow-400">Social Media Links</h3>
-            <div className="space-y-3">
-                {settings.socialLinks.map(link => (
-                    <div key={link.id} className="grid grid-cols-1 sm:grid-cols-[1fr,1fr,2fr,auto] gap-3 items-center p-3 bg-gray-900/50 rounded-lg border border-gray-800">
-                        <select
-                            value={link.icon}
-                            onChange={(e) => handleLinkChange(link.id, 'icon', e.target.value)}
-                            className="bg-gray-800 border-gray-700 rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500 text-sm h-10"
-                        >
-                            {Object.keys(AVAILABLE_SOCIAL_ICONS).map(iconName => (
-                                <option key={iconName} value={iconName}>{iconName}</option>
-                            ))}
-                        </select>
-                        <input
-                            type="text"
-                            placeholder="Display Name"
-                            value={link.name}
-                            onChange={(e) => handleLinkChange(link.id, 'name', e.target.value)}
-                            className="bg-gray-900 border-gray-700 rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500 text-sm"
-                        />
-                         <input
-                            type="url"
-                            placeholder="Full URL (e.g., https://...)"
-                            value={link.url}
-                            onChange={(e) => handleLinkChange(link.id, 'url', e.target.value)}
-                            className="sm:col-span-1 bg-gray-900 border-gray-700 rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500 text-sm"
-                        />
-                        <button type="button" onClick={() => handleRemoveLink(link.id)} className="text-gray-500 hover:text-red-500 p-2">
-                            <Trash2 size={18} />
-                        </button>
-                    </div>
-                ))}
-            </div>
-            <button
-                type="button"
-                onClick={handleAddLink}
-                className="flex items-center space-x-2 px-3 py-2 text-sm bg-gray-700 hover:bg-gray-600 rounded-md transition-colors"
-            >
-                <PlusCircle size={16} />
-                <span>Add Link</span>
-            </button>
-        </div>
-    );
-};
-
-
 const HomepageCustomizationSection: React.FC = () => {
     const [settings, setSettings] = useState<SiteSettings | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         getSiteSettings().then(data => {
+            // Ensure there are always 10 taglines for the inputs
             const currentTaglines = data.taglines || [];
             const filledTaglines = Array.from({ length: 10 }, (_, i) => currentTaglines[i] || '');
-            const socialLinks = data.socialLinks || [];
-            setSettings({ ...data, taglines: filledTaglines, socialLinks });
+            setSettings({ ...data, taglines: filledTaglines });
             setLoading(false);
         });
     }, []);
@@ -237,33 +165,31 @@ const HomepageCustomizationSection: React.FC = () => {
         toast.success('Cover image deleted.');
     };
     
-    const handleSettingsChange = (newSettings: SiteSettings) => {
-        setSettings(newSettings);
+    const handleTaglineChange = (index: number, value: string) => {
+        if (!settings) return;
+        const newTaglines = [...settings.taglines];
+        newTaglines[index] = value;
+        setSettings({ ...settings, taglines: newTaglines });
     };
 
-    const handleSaveChanges = async () => {
+    const handleSaveTaglines = async () => {
         if (!settings) return;
-        toast.loading('Saving settings...', { id: 'settings-save' });
-        // Filter out empty taglines before saving
-        const settingsToSave = {
-            ...settings,
-            taglines: settings.taglines.filter(t => t.trim() !== ''),
-        };
-        await updateSiteSettings(settingsToSave);
-        toast.success('Settings saved!', { id: 'settings-save' });
+        toast.loading('Saving taglines...', { id: 'tagline-save' });
+        await updateSiteSettings(settings);
+        toast.success('Taglines saved!', { id: 'tagline-save' });
     };
 
     if (loading) return <div>Loading settings...</div>;
-    if (!settings) return <div>Could not load settings.</div>;
 
     return (
         <div className="space-y-8">
              <h2 className="text-3xl text-yellow-400 border-b-2 border-yellow-800 pb-2">Homepage Customization</h2>
              
+             {/* Cover Pages Management */}
              <div className="space-y-4">
                 <h3 className="text-xl text-yellow-400">Cover Page Slideshow</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                    {settings.coverPages.map((url) => (
+                    {settings?.coverPages.map((url) => (
                         <div key={url} className="relative group aspect-video">
                             <img src={url} alt="Cover" className="w-full h-full object-cover rounded-md" />
                             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -281,31 +207,23 @@ const HomepageCustomizationSection: React.FC = () => {
                 </div>
              </div>
 
-             <SocialLinksSection settings={settings} onSettingsChange={handleSettingsChange} />
-
+             {/* Taglines Management */}
              <div className="space-y-4">
                 <h3 className="text-xl text-yellow-400">Rotating Taglines</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-                     {settings.taglines.map((tagline, index) => (
+                     {settings?.taglines.map((tagline, index) => (
                         <div key={index}>
                             <label className="text-sm text-gray-500">Tagline {index + 1}</label>
                             <input
                                 type="text"
                                 value={tagline}
-                                onChange={(e) => {
-                                    const newTaglines = [...settings.taglines];
-                                    newTaglines[index] = e.target.value;
-                                    handleSettingsChange({ ...settings, taglines: newTaglines });
-                                }}
+                                onChange={(e) => handleTaglineChange(index, e.target.value)}
                                 className="mt-1 block w-full bg-gray-900 border-gray-700 rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500 text-sm"
                             />
                         </div>
                      ))}
                 </div>
-             </div>
-
-             <div className="pt-4 border-t border-yellow-900/50">
-                <button onClick={handleSaveChanges} className="px-6 py-2 bg-red-600 rounded-md hover:bg-red-700 transition-colors font-semibold">Save All Customizations</button>
+                <button onClick={handleSaveTaglines} className="px-4 py-2 bg-red-600 rounded-md hover:bg-red-700 transition-colors">Save Taglines</button>
              </div>
         </div>
     );
