@@ -40,7 +40,7 @@ const AppContent: React.FC = () => {
                     <Route path="/auth" element={<AuthPage />} />
                     <Route path="/login-success" element={<ProtectedRoute><LoginSuccessPage /></ProtectedRoute>} />
                     <Route path="/home" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
-                    <Route path="/dashboard" element={<OwnerRoute><DashboardPage /></DashboardPage>} />
+                    <Route path="/dashboard" element={<OwnerRoute><DashboardPage /></OwnerRoute>} />
                     <Route path="/story/:id" element={<ProtectedRoute><StoryDetailPage /></ProtectedRoute>} />
                     <Route path="*" element={<Navigate to={user ? "/home" : "/auth"} />} />
                 </Routes>
